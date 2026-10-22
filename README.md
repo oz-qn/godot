@@ -1,3 +1,36 @@
+# Custom GDScript
+
+This is a custom fork of the Godot Engine with a changed syntax for GDScript.
+Scoping is now no longer tied to indentation and the ':' symbol but to brace based scoping ({}).
+
+This means code like:
+```gdscript
+if i > 10 {
+print(i)
+		i += 1
+}
+```
+is completely valid!
+
+One small change I had to make was to the match syntax. Because the indentation
+can no longer be used for scoping I had to add another way to differatiate the
+end of a block and I didn't want to use the braces as that gets very verbose.
+
+Instead of adding a **case** keyword I decided to borrow from the ML family of
+languages and adopt the | pipe operator. This means the following code is valid:
+
+```gdscript
+func _ready() {
+	match state {
+	| State.WALKING:
+		print("I am walking")
+	| State.IDLE:
+		print("I am idle")
+	| _:print("I am doing something else")
+	}
+}
+```
+
 # Godot Engine
 
 <p align="center">
