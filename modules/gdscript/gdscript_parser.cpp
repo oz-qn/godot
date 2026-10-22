@@ -38,6 +38,7 @@
 #include "core/math/math_defs.h"
 #include "core/object/class_db.h"
 #include "scene/main/multiplayer_api.h"
+#include "modules/gdscript/gdscript_tokenizer.h"
 
 #ifdef DEBUG_ENABLED
 #include "core/string/string_builder.h"
@@ -2481,6 +2482,10 @@ GDScriptParser::MatchNode *GDScriptParser::parse_match() {
 			advance();
 		}
 
+		if (check(GDScriptTokenizer::Token::BRACE_CLOSE) || is_at_end()) {
+			break;
+		}
+
 		consume(GDScriptTokenizer::Token::PIPE, "Expected '|' before match expression.");
 
 		if (match(GDScriptTokenizer::Token::PASS)) {
@@ -2617,15 +2622,15 @@ GDScriptParser::SuiteNode *GDScriptParser::parse_match_body(const String &p_cont
 
 	complete_extents(suite);
 
-	if (multiline) {
-		if (!lambda_ended && !check(GDScriptTokenizer::Token::PIPE)) {
-			// consume(GDScriptTokenizer::Token::BRACE_CLOSE, vformat(R"(Missing '}' at the end of %s.)", p_context));
-		} else {
-			match(GDScriptTokenizer::Token::BRACE_CLOSE);
-		}
-	} else if (previous.type == GDScriptTokenizer::Token::SEMICOLON) {
-		consume(GDScriptTokenizer::Token::BRACE_CLOSE, vformat(R"(Expected '}' after ';' at the end of %s.)", p_context));
-	}
+	// if (multiline) {
+	// 	// if (!lambda_ended && !check(GDScriptTokenizer::Token::PIPE)) {
+	// 	// 	// consume(GDScriptTokenizer::Token::BRACE_CLOSE, vformat(R"(Missing '}' at the end of %s.)", p_context));
+	// 	// } else {
+	// 	// 	match(GDScriptTokenizer::Token::BRACE_CLOSE);
+	// 	// }
+	// } else if (previous.type == GDScriptTokenizer::Token::SEMICOLON) {
+	// 	consume(GDScriptTokenizer::Token::BRACE_CLOSE, vformat(R"(Expected '}' after ';' at the end of %s.)", p_context));
+	// }
 
 	current_suite = suite->parent_block;
 	return suite;
