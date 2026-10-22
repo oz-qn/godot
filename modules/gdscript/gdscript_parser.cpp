@@ -1796,7 +1796,7 @@ bool GDScriptParser::parse_function_signature(FunctionNode *p_function, SuiteNod
 
 	// TODO: Improve token consumption so it synchronizes to a statement boundary. This way we can get into the function body with unrecognized tokens.
 	if (p_type == "lambda") {
-		return consume(GDScriptTokenizer::Token::COLON, R"(Expected ":" after lambda declaration.)");
+		return consume(GDScriptTokenizer::Token::BRACE_OPEN, R"(Expected "{" after lambda declaration.)");
 	}
 
 	if (match(GDScriptTokenizer::Token::SEMICOLON)) {
