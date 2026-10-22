@@ -961,15 +961,15 @@ GDScriptParser::ClassNode *GDScriptParser::parse_class(bool p_is_static) {
 		parse_extends();
 	}
 
-	consume(GDScriptTokenizer::Token::COLON, R"(Expected ":" after class declaration.)");
+	consume(GDScriptTokenizer::Token::BRACE_OPEN, R"(Expected "{" after class declaration.)");
 
 	bool multiline = match(GDScriptTokenizer::Token::NEWLINE);
 
-	if (multiline && !consume(GDScriptTokenizer::Token::INDENT, R"(Expected indented block after class declaration.)")) {
-		current_class = previous_class;
-		complete_extents(n_class);
-		return n_class;
-	}
+	// if (multiline && !consume(GDScriptTokenizer::Token::INDENT, R"(Expected indented block after class declaration.)")) {
+	// 	current_class = previous_class;
+	// 	complete_extents(n_class);
+	// 	return n_class;
+	// }
 
 	if (match(GDScriptTokenizer::Token::EXTENDS)) {
 		if (n_class->extends_used) {
@@ -983,7 +983,7 @@ GDScriptParser::ClassNode *GDScriptParser::parse_class(bool p_is_static) {
 	complete_extents(n_class);
 
 	if (multiline) {
-		consume(GDScriptTokenizer::Token::DEDENT, R"(Missing unindent at the end of the class body.)");
+		consume(GDScriptTokenizer::Token::BRACE_CLOSE, R"(Expected "}" after class declaration.)");
 	}
 
 	current_class = previous_class;
@@ -1188,13 +1188,27 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 				end_statement(R"("pass")");
 				break;
 			case GDScriptTokenizer::Token::DEDENT:
-				class_end = true;
+				advance();
+				break;
+			case GDScriptTokenizer::Token::INDENT:
+				advance();
 				break;
 			case GDScriptTokenizer::Token::LITERAL:
-				if (parse_standalone_string()) {
+				if (current.literal.get_type() == Variant::STRING) {
+					// Allow strings in class body as multiline comments.
+					advance();
+					if (!match(GDScriptTokenizer::Token::NEWLINE)) {
+						push_error("Expected newline after comment string.");
+					}
 					break;
 				}
 				[[fallthrough]];
+			case GDScriptTokenizer::Token::BRACE_CLOSE:
+				class_end = true;
+				break;
+			case GDScriptTokenizer::Token::NEWLINE:
+				advance();
+				break;
 			default:
 				// Display a completion with identifiers.
 				make_completion_context(COMPLETION_IDENTIFIER, nullptr);
@@ -1290,7 +1304,7 @@ GDScriptParser::VariableNode *GDScriptParser::parse_variable(bool p_is_static, b
 		variable->assignments++;
 	}
 
-	if (p_allow_property && match(GDScriptTokenizer::Token::COLON)) {
+	if (p_allow_property && match(GDScriptTokenizer::Token::BRACE_OPEN)) {
 		if (match(GDScriptTokenizer::Token::NEWLINE)) {
 			return parse_property(variable, true);
 		} else {
@@ -1381,7 +1395,7 @@ GDScriptParser::VariableNode *GDScriptParser::parse_property(VariableNode *p_var
 	}
 
 	if (p_need_indent) {
-		consume(GDScriptTokenizer::Token::DEDENT, R"(Expected end of indented block for property.)");
+		consume(GDScriptTokenizer::Token::BRACE_CLOSE, R"(Expected end of indented block for property.)");
 	}
 	return property;
 }
@@ -1410,10 +1424,7 @@ void GDScriptParser::parse_property_setter(VariableNode *p_variable) {
 			complete_extents(parameter);
 
 			consume(GDScriptTokenizer::Token::PARENTHESIS_CLOSE, R"*(Expected ")" after parameter name.)*");
-			consume(GDScriptTokenizer::Token::COLON, R"*(Expected ":" after ")".)*");
-
-			function->header_end_line = previous.start_line;
-			function->header_end_column = previous.start_column;
+			consume(GDScriptTokenizer::Token::BRACE_OPEN, R"*(Expected "{" after ")".)*");
 
 			FunctionNode *previous_function = current_function;
 			current_function = function;
@@ -1446,9 +1457,9 @@ void GDScriptParser::parse_property_getter(VariableNode *p_variable) {
 
 			if (match(GDScriptTokenizer::Token::PARENTHESIS_OPEN)) {
 				consume(GDScriptTokenizer::Token::PARENTHESIS_CLOSE, R"*(Expected ")" after "get(".)*");
-				consume(GDScriptTokenizer::Token::COLON, R"*(Expected ":" after "get()".)*");
+				consume(GDScriptTokenizer::Token::BRACE_OPEN, R"*(Expected "{" after "get()".)*");
 			} else {
-				consume(GDScriptTokenizer::Token::COLON, R"(Expected ":" or "(" after "get".)");
+				consume(GDScriptTokenizer::Token::BRACE_OPEN, R"(Expected "{" or "(" after "get".)");
 			}
 
 			function->header_end_line = previous.start_line;
@@ -1787,8 +1798,16 @@ bool GDScriptParser::parse_function_signature(FunctionNode *p_function, SuiteNod
 	if (p_type == "lambda") {
 		return consume(GDScriptTokenizer::Token::COLON, R"(Expected ":" after lambda declaration.)");
 	}
-	// The colon may not be present in the case of abstract functions.
-	return match(GDScriptTokenizer::Token::COLON);
+
+	if (match(GDScriptTokenizer::Token::SEMICOLON)) {
+		return false;
+	}
+
+	while (is_whitespace()) {
+		advance();
+	}
+	consume(GDScriptTokenizer::Token::BRACE_OPEN, "Expected '}' after function body.");
+	return true;
 }
 
 GDScriptParser::FunctionNode *GDScriptParser::parse_function(bool p_is_static) {
@@ -1952,6 +1971,10 @@ bool GDScriptParser::register_annotation(const MethodInfo &p_info, uint32_t p_ta
 	return true;
 }
 
+bool GDScriptParser::is_whitespace() const {
+	return check(GDScriptTokenizer::Token::NEWLINE) || check(GDScriptTokenizer::Token::INDENT) || check(GDScriptTokenizer::Token::DEDENT);
+}
+
 GDScriptParser::SuiteNode *GDScriptParser::parse_suite(const String &p_context, SuiteNode *p_suite, bool p_for_lambda) {
 	SuiteNode *suite = p_suite != nullptr ? p_suite : alloc_node<SuiteNode>();
 	suite->parent_block = current_suite;
@@ -1969,13 +1992,13 @@ GDScriptParser::SuiteNode *GDScriptParser::parse_suite(const String &p_context, 
 		multiline = true;
 	}
 
-	if (multiline) {
-		if (!consume(GDScriptTokenizer::Token::INDENT, vformat(R"(Expected indented block after %s.)", p_context))) {
-			current_suite = suite->parent_block;
-			complete_extents(suite);
-			return suite;
-		}
-	}
+	// if (multiline) {
+	// 	if (!consume(GDScriptTokenizer::Token::INDENT, vformat(R"(Expected indented block after %s.)", p_context))) {
+	// 		current_suite = suite->parent_block;
+	// 		complete_extents(suite);
+	// 		return suite;
+	// 	}
+	// }
 	reset_extents(suite, current);
 
 	int error_count = 0;
@@ -2024,19 +2047,18 @@ GDScriptParser::SuiteNode *GDScriptParser::parse_suite(const String &p_context, 
 				break;
 		}
 
-	} while ((multiline || previous.type == GDScriptTokenizer::Token::SEMICOLON) && !check(GDScriptTokenizer::Token::DEDENT) && !lambda_ended && !is_at_end());
+	} while ((multiline || previous.type == GDScriptTokenizer::Token::SEMICOLON) && !check(GDScriptTokenizer::Token::BRACE_CLOSE) && !lambda_ended && !is_at_end());
 
 	complete_extents(suite);
 
 	if (multiline) {
 		if (!lambda_ended) {
-			consume(GDScriptTokenizer::Token::DEDENT, vformat(R"(Missing unindent at the end of %s.)", p_context));
-
+			consume(GDScriptTokenizer::Token::BRACE_CLOSE, vformat(R"(Missing '}' at the end of %s.)", p_context));
 		} else {
-			match(GDScriptTokenizer::Token::DEDENT);
+			match(GDScriptTokenizer::Token::BRACE_CLOSE);
 		}
 	} else if (previous.type == GDScriptTokenizer::Token::SEMICOLON) {
-		consume(GDScriptTokenizer::Token::NEWLINE, vformat(R"(Expected newline after ";" at the end of %s.)", p_context));
+		consume(GDScriptTokenizer::Token::BRACE_CLOSE, vformat(R"(Expected '}' after ';' at the end of %s.)", p_context));
 	}
 
 	if (p_for_lambda) {
@@ -2156,6 +2178,17 @@ GDScriptParser::Node *GDScriptParser::parse_statement() {
 			}
 			break;
 		}
+		case GDScriptTokenizer::Token::INDENT:
+			advance();
+			break;
+		case GDScriptTokenizer::Token::DEDENT:
+			advance();
+			break;
+		case GDScriptTokenizer::Token::NEWLINE:
+			advance();
+			break;
+		case GDScriptTokenizer::Token::BRACE_CLOSE:
+			break;
 		default: {
 			// Expression statement.
 			ExpressionNode *expression = parse_expression(true); // Allow assignment here.
@@ -2339,9 +2372,10 @@ GDScriptParser::ForNode *GDScriptParser::parse_for() {
 		push_error(R"(Expected iterable after "in".)");
 	}
 
-	if (!match(GDScriptTokenizer::Token::COLON)) {
-		push_error(vformat(R"(Expected ":" after "for" condition, found "%s" instead.)", current.get_name()), current);
+	while (is_whitespace()) {
+		advance();
 	}
+	consume(GDScriptTokenizer::Token::BRACE_OPEN, R"(Expected "{" after "for" condition.)");
 
 	// Save break/continue state.
 	bool could_break = can_break;
@@ -2378,9 +2412,11 @@ GDScriptParser::IfNode *GDScriptParser::parse_if(const String &p_token) {
 		push_error(vformat(R"(Expected conditional expression after "%s".)", p_token));
 	}
 
-	if (!match(GDScriptTokenizer::Token::COLON)) {
-		push_error(vformat(R"(Expected ":" after "%s" condition, found "%s" instead.)", p_token, current.get_name()), current);
+	while (is_whitespace()) {
+		advance();
 	}
+
+	consume(GDScriptTokenizer::Token::BRACE_OPEN, vformat(R"(Expected "{" after "%s" condition.)", p_token));
 
 	n_if->true_block = parse_suite(vformat(R"("%s" block)", p_token));
 	n_if->true_block->parent_if = n_if;
@@ -2404,7 +2440,7 @@ GDScriptParser::IfNode *GDScriptParser::parse_if(const String &p_token) {
 
 		current_suite = previous_suite;
 	} else if (match(GDScriptTokenizer::Token::ELSE)) {
-		consume(GDScriptTokenizer::Token::COLON, R"(Expected ":" after "else".)");
+		consume(GDScriptTokenizer::Token::BRACE_OPEN, R"(Expected "{" after "else".)");
 		n_if->false_block = parse_suite(R"("else" block)");
 	}
 	complete_extents(n_if);
@@ -2427,20 +2463,26 @@ GDScriptParser::MatchNode *GDScriptParser::parse_match() {
 		push_error(R"(Expected expression to test after "match".)");
 	}
 
-	consume(GDScriptTokenizer::Token::COLON, R"(Expected ":" after "match" expression.)");
+	consume(GDScriptTokenizer::Token::BRACE_OPEN, R"(Expected "{" after "match" expression.)");
 	consume(GDScriptTokenizer::Token::NEWLINE, R"(Expected a newline after "match" statement.)");
 
-	if (!consume(GDScriptTokenizer::Token::INDENT, R"(Expected an indented block after "match" statement.)")) {
-		complete_extents(match_node);
-		return match_node;
-	}
+	// if (!consume(GDScriptTokenizer::Token::INDENT, R"(Expected an indented block after "match" statement.)")) {
+	// 	complete_extents(match_node);
+	// 	return match_node;
+	// }
 
 	bool all_have_return = true;
 	bool have_wildcard = false;
 
 	List<AnnotationNode *> match_branch_annotation_stack;
 
-	while (!check(GDScriptTokenizer::Token::DEDENT) && !is_at_end()) {
+	while (!check(GDScriptTokenizer::Token::BRACE_CLOSE) && !is_at_end()) {
+		while (is_whitespace()){
+			advance();
+		}
+
+		consume(GDScriptTokenizer::Token::PIPE, "Expected '|' before match expression.");
+
 		if (match(GDScriptTokenizer::Token::PASS)) {
 			consume(GDScriptTokenizer::Token::NEWLINE, R"(Expected newline after "pass".)");
 			continue;
@@ -2482,7 +2524,7 @@ GDScriptParser::MatchNode *GDScriptParser::parse_match() {
 	}
 	complete_extents(match_node);
 
-	consume(GDScriptTokenizer::Token::DEDENT, R"(Expected an indented block after "match" statement.)");
+	consume(GDScriptTokenizer::Token::BRACE_CLOSE, R"(Expected a '}' after "match" statement.)");
 
 	if (all_have_return && have_wildcard) {
 		current_suite->has_return = true;
@@ -2494,6 +2536,99 @@ GDScriptParser::MatchNode *GDScriptParser::parse_match() {
 	match_branch_annotation_stack.clear();
 
 	return match_node;
+}
+
+GDScriptParser::SuiteNode *GDScriptParser::parse_match_body(const String &p_context, SuiteNode *p_suite) {
+	SuiteNode *suite = p_suite != nullptr ? p_suite : alloc_node<SuiteNode>();
+	suite->parent_block = current_suite;
+	suite->parent_function = current_function;
+	current_suite = suite;
+
+	if (suite->parent_block != nullptr && suite->parent_block->is_in_loop) {
+		// Do not reset to false if true is set before calling parse_suite().
+		suite->is_in_loop = true;
+	}
+
+	bool multiline = false;
+
+	if (match(GDScriptTokenizer::Token::NEWLINE)) {
+		multiline = true;
+	}
+
+	// if (multiline) {
+	// 	if (!consume(GDScriptTokenizer::Token::INDENT, vformat(R"(Expected indented block after %s.)", p_context))) {
+	// 		current_suite = suite->parent_block;
+	// 		complete_extents(suite);
+	// 		return suite;
+	// 	}
+	// }
+	reset_extents(suite, current);
+
+	int error_count = 0;
+
+	do {
+		while (is_whitespace()) {
+			advance();
+		}
+		if (is_at_end() || (!multiline && previous.type == GDScriptTokenizer::Token::SEMICOLON && check(GDScriptTokenizer::Token::NEWLINE)) || check(GDScriptTokenizer::Token::PIPE)) {
+			break;
+		}
+		Node *statement = parse_statement();
+		if (statement == nullptr) {
+			if (error_count++ > 100) {
+				push_error("Too many statement errors.", suite);
+				break;
+			}
+			continue;
+		}
+		suite->statements.push_back(statement);
+
+		// Register locals.
+		switch (statement->type) {
+			case Node::VARIABLE: {
+				VariableNode *variable = static_cast<VariableNode *>(statement);
+				const SuiteNode::Local &local = current_suite->get_local(variable->identifier->name);
+				if (local.type != SuiteNode::Local::UNDEFINED) {
+					push_error(vformat(R"(There is already a %s named "%s" declared in this scope.)", local.get_name(), variable->identifier->name), variable->identifier);
+				}
+				current_suite->add_local(variable, current_function);
+				break;
+			}
+			case Node::CONSTANT: {
+				ConstantNode *constant = static_cast<ConstantNode *>(statement);
+				const SuiteNode::Local &local = current_suite->get_local(constant->identifier->name);
+				if (local.type != SuiteNode::Local::UNDEFINED) {
+					String name;
+					if (local.type == SuiteNode::Local::CONSTANT) {
+						name = "constant";
+					} else {
+						name = "variable";
+					}
+					push_error(vformat(R"(There is already a %s named "%s" declared in this scope.)", name, constant->identifier->name), constant->identifier);
+				}
+				current_suite->add_local(constant, current_function);
+				break;
+			}
+			default:
+				break;
+		}
+
+	} while ((multiline || previous.type == GDScriptTokenizer::Token::SEMICOLON) && !check(GDScriptTokenizer::Token::BRACE_CLOSE) && !lambda_ended && !is_at_end() && !check(GDScriptTokenizer::Token::PIPE));
+
+	complete_extents(suite);
+
+	if (multiline) {
+		if (!lambda_ended && !check(GDScriptTokenizer::Token::PIPE)) {
+			// consume(GDScriptTokenizer::Token::BRACE_CLOSE, vformat(R"(Missing '}' at the end of %s.)", p_context));
+		} else {
+			match(GDScriptTokenizer::Token::BRACE_CLOSE);
+		}
+	} else if (previous.type == GDScriptTokenizer::Token::SEMICOLON) {
+		consume(GDScriptTokenizer::Token::BRACE_CLOSE, vformat(R"(Expected '}' after ';' at the end of %s.)", p_context));
+	}
+
+	current_suite = suite->parent_block;
+	return suite;
 }
 
 GDScriptParser::MatchBranchNode *GDScriptParser::parse_match_branch() {
@@ -2577,7 +2712,7 @@ GDScriptParser::MatchBranchNode *GDScriptParser::parse_match_branch() {
 		}
 	}
 
-	branch->block = parse_suite("match pattern block", suite);
+	branch->block = parse_match_body("match pattern block", suite);
 	complete_extents(branch);
 
 	return branch;
@@ -2737,10 +2872,10 @@ GDScriptParser::WhileNode *GDScriptParser::parse_while() {
 	if (n_while->condition == nullptr) {
 		push_error(R"(Expected conditional expression after "while".)");
 	}
-
-	if (!match(GDScriptTokenizer::Token::COLON)) {
-		push_error(vformat(R"(Expected ":" after "while" condition, found "%s" instead.)", current.get_name()), current);
+	while (is_whitespace()) {
+		advance();
 	}
+	consume(GDScriptTokenizer::Token::BRACE_OPEN, R"(Expected ":" after "while" condition.)");
 
 	// Save break/continue state.
 	bool could_break = can_break;

@@ -1579,6 +1579,7 @@ private:
 
 	GDScriptTokenizer::Token advance();
 	bool match(GDScriptTokenizer::Token::Type p_token_type);
+	bool is_whitespace() const;
 	bool check(GDScriptTokenizer::Token::Type p_token_type) const;
 	bool consume(GDScriptTokenizer::Token::Type p_token_type, const String &p_error_message);
 	bool is_at_end() const;
@@ -1603,7 +1604,7 @@ private:
 	FunctionNode *parse_function(bool p_is_static);
 	bool parse_function_signature(FunctionNode *p_function, SuiteNode *p_body, const String &p_type, int p_signature_start);
 	SuiteNode *parse_suite(const String &p_context, SuiteNode *p_suite = nullptr, bool p_for_lambda = false);
-	// Annotations
+	SuiteNode *parse_match_body(const String &p_context, SuiteNode *p_suite = nullptr);	// Annotations
 	AnnotationNode *parse_annotation(uint32_t p_valid_targets);
 	static bool register_annotation(const MethodInfo &p_info, uint32_t p_target_kinds, AnnotationAction p_apply, const Vector<Variant> &p_default_arguments = Vector<Variant>(), bool p_is_vararg = false);
 	bool validate_annotation_arguments(AnnotationNode *p_annotation);
