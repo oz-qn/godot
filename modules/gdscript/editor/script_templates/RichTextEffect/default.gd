@@ -13,6 +13,7 @@ extends _BASE_
 var bbcode := "_CLASS_SNAKE_CASE_"
 
 
-func _process_custom_fx(char_fx: CharFXTransform) -> bool:
+func _process_custom_fx(char_fx: CharFXTransform) -> bool {
 	var param: float = char_fx.env.get("param", 1.0)
 	return true
+}

@@ -592,8 +592,8 @@ String GDScriptLanguage::make_function(const String &p_class, const String &p_na
 			}
 		}
 	}
-	result += String(")") + (type_hints ? " -> void" : "") + ":\n" +
-			_get_indentation() + "pass # Replace with function body.\n";
+	result += String(")") + (type_hints ? " -> void" : "") + " {\n" +
+			_get_indentation() + "pass # Replace with function body.\n}";
 
 	return result;
 }
@@ -3896,9 +3896,8 @@ static void _find_call_arguments(GDScriptParser::CompletionContext &p_context, c
 				}
 				method_hint += ")";
 				if (type_hints) {
-					method_hint += " -> " + _get_visual_datatype(mi.return_val, false, class_name);
+					method_hint += " -> " + _get_visual_datatype(mi.return_val, false, class_name) + " ";
 				}
-				method_hint += ":";
 
 				EditorLanguage::CompletionOption option(method_hint, EditorLanguage::CompletionKind::FUNCTION);
 				options.insert(option.display, option);
