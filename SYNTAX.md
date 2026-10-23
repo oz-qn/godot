@@ -70,8 +70,8 @@ var armor: int = 10 { set(value) { armor = value; } get { return armor; } }
 
 ```
 
-## Inline Class declaration
-Inline class declarations now use brace scoping rather than indentation.
+## Inner Class declaration
+Inner class declarations now use brace scoping rather than indentation.
 
 ```gdscript
 class Player {
