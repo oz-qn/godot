@@ -30,11 +30,11 @@ while i < 10 {
 
 ### Match cases
 The match operation works a little differently. Before, gdscript used indentation
-level to figure out if something is an case expression or part of the statement block.
+level to figure out if something is a case expression or part of the statement block.
 This cannot be used as indentation is no longer a factor.
 
 Instead of introducing a new case keyword I decided to borrow from the [ML language family](https://en.wikipedia.org/wiki/OCaml)
-and use the pipe operator ('|') to specify a new case expression followed by a comma.
+and use the pipe operator ('|') to specify a new case expression followed by a colon.
 
 This should make it that you can inline your entire match statement (probably don't do that.)
 ```gdscript
