@@ -1358,7 +1358,7 @@ GDScriptParser::VariableNode *GDScriptParser::parse_property(VariableNode *p_var
 			}
 		}
 
-		while (is_whitespace()) {
+		while (is_whitespace() && i == 0) {
 			advance();
 		}
 		if (!match(GDScriptTokenizer::Token::IDENTIFIER)) {
