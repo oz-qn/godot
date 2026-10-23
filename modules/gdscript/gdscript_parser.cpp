@@ -1268,30 +1268,9 @@ GDScriptParser::VariableNode *GDScriptParser::parse_variable(bool p_is_static, b
 	variable->is_static = p_is_static;
 
 	if (match(GDScriptTokenizer::Token::COLON)) {
-		if (check(GDScriptTokenizer::Token::NEWLINE)) {
-			if (p_allow_property) {
-				advance();
-				return parse_property(variable, true);
-			} else {
-				push_error(R"(Expected type after ":")");
-				complete_extents(variable);
-				return nullptr;
-			}
-		} else if (check((GDScriptTokenizer::Token::EQUAL))) {
-			// Infer type.
+		if (check((GDScriptTokenizer::Token::EQUAL))) {
 			variable->infer_datatype = true;
 		} else {
-			if (p_allow_property) {
-				make_completion_context(COMPLETION_PROPERTY_DECLARATION_OR_TYPE, variable);
-				if (check(GDScriptTokenizer::Token::IDENTIFIER)) {
-					// Check if get or set.
-					if (current.get_identifier() == "get" || current.get_identifier() == "set") {
-						return parse_property(variable, false);
-					}
-				}
-			}
-
-			// Parse type.
 			variable->datatype_specifier = parse_type();
 		}
 	}
@@ -1306,11 +1285,7 @@ GDScriptParser::VariableNode *GDScriptParser::parse_variable(bool p_is_static, b
 	}
 
 	if (p_allow_property && match(GDScriptTokenizer::Token::BRACE_OPEN)) {
-		if (match(GDScriptTokenizer::Token::NEWLINE)) {
-			return parse_property(variable, true);
-		} else {
-			return parse_property(variable, false);
-		}
+		return parse_property(variable, false);
 	}
 
 	complete_extents(variable);
@@ -1320,11 +1295,15 @@ GDScriptParser::VariableNode *GDScriptParser::parse_variable(bool p_is_static, b
 }
 
 GDScriptParser::VariableNode *GDScriptParser::parse_property(VariableNode *p_variable, bool p_need_indent) {
-	if (p_need_indent) {
-		if (!consume(GDScriptTokenizer::Token::INDENT, R"(Expected indented block for property after ":".)")) {
-			complete_extents(p_variable);
-			return nullptr;
-		}
+	// if (p_need_indent) {
+	// 	if (!consume(GDScriptTokenizer::Token::INDENT, R"(Expected indented block for property after ":".)")) {
+	// 		complete_extents(p_variable);
+	// 		return nullptr;
+	// 	}
+	// }
+
+	while (is_whitespace()) {
+		advance();
 	}
 
 	VariableNode *property = p_variable;
@@ -1342,9 +1321,6 @@ GDScriptParser::VariableNode *GDScriptParser::parse_property(VariableNode *p_var
 		p_variable->property = VariableNode::PROP_SETGET;
 	} else {
 		p_variable->property = VariableNode::PROP_INLINE;
-		if (!p_need_indent) {
-			push_error("Property with inline code must go to an indented block.");
-		}
 	}
 
 	bool getter_used = false;
@@ -1374,16 +1350,17 @@ GDScriptParser::VariableNode *GDScriptParser::parse_property(VariableNode *p_var
 		if (i == 0 && p_variable->property == VariableNode::PROP_SETGET) {
 			if (match(GDScriptTokenizer::Token::COMMA)) {
 				// Consume potential newline.
-				if (match(GDScriptTokenizer::Token::NEWLINE)) {
-					if (!p_need_indent) {
-						push_error(R"(Inline setter/getter setting cannot span across multiple lines (use "\\"" if needed).)");
-					}
+				while (is_whitespace()) {
+					advance();
 				}
 			} else {
 				break;
 			}
 		}
 
+		while (is_whitespace()) {
+			advance();
+		}
 		if (!match(GDScriptTokenizer::Token::IDENTIFIER)) {
 			break;
 		}
@@ -1395,9 +1372,10 @@ GDScriptParser::VariableNode *GDScriptParser::parse_property(VariableNode *p_var
 		end_statement("property declaration");
 	}
 
-	if (p_need_indent) {
-		consume(GDScriptTokenizer::Token::BRACE_CLOSE, R"(Expected end of indented block for property.)");
+	while (is_whitespace()) {
+		advance();
 	}
+	consume(GDScriptTokenizer::Token::BRACE_CLOSE, R"(Expected end of indented block for property.)");
 	return property;
 }
 
@@ -1425,6 +1403,9 @@ void GDScriptParser::parse_property_setter(VariableNode *p_variable) {
 			complete_extents(parameter);
 
 			consume(GDScriptTokenizer::Token::PARENTHESIS_CLOSE, R"*(Expected ")" after parameter name.)*");
+			while (is_whitespace()) {
+				advance();
+			}
 			consume(GDScriptTokenizer::Token::BRACE_OPEN, R"*(Expected "{" after ")".)*");
 
 			FunctionNode *previous_function = current_function;
@@ -1458,8 +1439,14 @@ void GDScriptParser::parse_property_getter(VariableNode *p_variable) {
 
 			if (match(GDScriptTokenizer::Token::PARENTHESIS_OPEN)) {
 				consume(GDScriptTokenizer::Token::PARENTHESIS_CLOSE, R"*(Expected ")" after "get(".)*");
+				while (is_whitespace()) {
+					advance();
+				}
 				consume(GDScriptTokenizer::Token::BRACE_OPEN, R"*(Expected "{" after "get()".)*");
 			} else {
+				while (is_whitespace()) {
+					advance();
+				}
 				consume(GDScriptTokenizer::Token::BRACE_OPEN, R"(Expected "{" or "(" after "get".)");
 			}
 
